@@ -18,6 +18,7 @@ from ...quantization import FP8GlobalStateManager
 from ...module.base import (
     fill_userbuffers_buffer_for_all_gather,
     get_ub,
+    using_cublasmp_backend,
     _2X_ACC_FPROP,
 )
 from ...module._common import set_quantizer_amax_reduction_group
@@ -321,7 +322,14 @@ class UserbuffersForwardLinear(FusedOperation):
         with_quantized_compute = FP8GlobalStateManager.is_fp8_enabled()
         if with_quantized_compute:
             recipe = FP8GlobalStateManager.get_fp8_recipe()
-            if not any((recipe.delayed(), recipe.float8_current_scaling(), recipe.mxfp8())):
+            if not any(
+                (
+                    recipe.delayed(),
+                    recipe.float8_current_scaling(),
+                    recipe.mxfp8(),
+                    recipe.nvfp4() and using_cublasmp_backend(),
+                )
+            ):
                 raise RuntimeError(
                     f"Unsupported recipe for Userbuffers ({recipe.__class__.__name__})"
                 )

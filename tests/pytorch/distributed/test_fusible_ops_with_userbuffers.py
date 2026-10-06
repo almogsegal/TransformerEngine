@@ -31,6 +31,7 @@ from transformer_engine.pytorch import (
     Float8Quantizer,
     Float8CurrentScalingQuantizer,
     MXFP8Quantizer,
+    NVFP4Quantizer,
     QuantizedTensor,
     Float8Tensor,
 )
@@ -40,7 +41,7 @@ from transformer_engine.pytorch import (
 _current_file = pathlib.Path(__file__).resolve()
 # Prepend so installed packages with a top-level utils module cannot shadow the test helpers.
 sys.path = [str(_current_file.parent.parent)] + sys.path
-from utils import dtype_tols, make_recipe, run_distributed, str_to_dtype
+from utils import dtype_tols, make_recipe, quantization_tols, run_distributed, str_to_dtype
 
 # Check if FP8 is supported
 fp8_available, reason_for_no_fp8 = te.is_fp8_available(return_reason=True)
@@ -170,6 +171,8 @@ def make_reference_and_test_tensors(
         test = quantizer(test)
     elif quantization == "mxfp8":
         test = MXFP8Quantizer(fp8_dtype=te.DType.kFloat8E4M3)(test)
+    elif quantization == "nvfp4":
+        test = NVFP4Quantizer()(test)
     else:
         raise ValueError(f"Unsupported quantization scheme ({quantization})")
     if isinstance(test, QuantizedTensor) and not test_is_quantized:
@@ -377,6 +380,8 @@ def _test_linear(
             if isinstance(model[0].weight, Float8Tensor)
             else te.DType.kFloat8E4M3
         )
+        if quantization == "nvfp4":
+            tols = quantization_tols(quantization)
     if te.module.base.using_cublasmp_backend() and not quantized_compute:
         # cuBLASMp's GEMM+RS kernel runs a slightly different GEMM algo than Userbuffers
         # (e.g. split-accumulator is always enabled) so it very narrowly violates the default

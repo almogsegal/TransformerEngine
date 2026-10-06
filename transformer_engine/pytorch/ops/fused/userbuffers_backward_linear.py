@@ -23,6 +23,7 @@ from ...module.base import (
 from ...module._common import set_quantizer_amax_reduction_group
 from ...quantized_tensor import Quantizer
 from ...tensor.mxfp8_tensor import MXFP8Quantizer
+from ...tensor.nvfp4_tensor import NVFP4Quantizer
 from ...utils import canonicalize_device, canonicalize_dtype, clear_tensor_data
 from ..basic import BasicLinear, Bias, ReduceScatter
 from .._common import (
@@ -306,7 +307,7 @@ class UserbuffersBackwardLinear(FusedOperation):
                 if (
                     with_columnwise
                     and with_dgrad_all_gather_dy
-                    and not isinstance(grad_output_quantizer, MXFP8Quantizer)
+                    and not isinstance(grad_output_quantizer, (MXFP8Quantizer, NVFP4Quantizer))
                 ):
                     with_columnwise = False
                 grad_output_quantizer.set_usage(
@@ -342,9 +343,9 @@ class UserbuffersBackwardLinear(FusedOperation):
                 if not is_quantized_tensor(x_local):
                     if cublasmp_column_tp:
                         # The upcoming all-gather needs rowwise FP8 (transposes
-                        # are computed during the gather) or columnwise MXFP8
-                        # (rowwise->columnwise can't be done after gather).
-                        if isinstance(input_quantizer, MXFP8Quantizer):
+                        # are computed during the gather) or columnwise MXFP8 and
+                        # NVFP4 (rowwise->columnwise can't be done after gather).
+                        if isinstance(input_quantizer, (MXFP8Quantizer, NVFP4Quantizer)):
                             input_quantizer.set_usage(rowwise=False, columnwise=True)
                         else:
                             input_quantizer.set_usage(rowwise=True, columnwise=False)
@@ -362,7 +363,7 @@ class UserbuffersBackwardLinear(FusedOperation):
             quantizer = None
             if with_quantized_compute:
                 quantizer = input_quantizer
-                if isinstance(quantizer, MXFP8Quantizer):
+                if isinstance(quantizer, (MXFP8Quantizer, NVFP4Quantizer)):
                     quantizer.set_usage(rowwise=False, columnwise=True)
                 else:
                     # FP8 per-tensor: gather rowwise + create the columnwise
@@ -458,9 +459,9 @@ class UserbuffersBackwardLinear(FusedOperation):
                 # cuBLASMp's AG+GEMM DGRAD does not preserve the gathered dy ensor. Re-gather
                 # dy_local for wgrad with the appropriate quantization direction for each recipe.
                 if grad_output_quantizer is not None:
-                    if isinstance(grad_output_quantizer, MXFP8Quantizer):
-                        # MXFP8 can't convert rowwise to columnwise, so gather
-                        # columnwise data directly.
+                    if isinstance(grad_output_quantizer, (MXFP8Quantizer, NVFP4Quantizer)):
+                        # MXFP8 and NVFP4 can't convert rowwise to columnwise, so
+                        # gather columnwise data directly.
                         grad_output_quantizer.set_usage(rowwise=False, columnwise=True)
                     else:
                         # FP8 per-tensor: gather rowwise + create the columnwise
