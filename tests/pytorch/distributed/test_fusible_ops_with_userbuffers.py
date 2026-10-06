@@ -244,6 +244,17 @@ def _test_linear(
         requires_grad=False,
     )
 
+    # Give each rank's sequence shard a different magnitude: an all-gathered tensor is then only
+    # right if every rank quantizes its shard with the same (amax-reduced) scale. Scaling by
+    # powers of two is exact.
+    if sequence_parallel:
+        local_batch_size = batch_size // world_size
+        with torch.no_grad():
+            for shard in range(world_size):
+                rows = slice(shard * local_batch_size, (shard + 1) * local_batch_size)
+                for tensor in (x_ref, x_test, dy_ref, dy_test):
+                    tensor[rows] *= 2.0**shard
+
     # Plain PyTorch implementation
     y_ref = torch.nn.functional.linear(x_ref, w_ref)
     if bias:
