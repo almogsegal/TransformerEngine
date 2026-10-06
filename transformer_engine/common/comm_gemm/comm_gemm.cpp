@@ -347,11 +347,11 @@ void cublasmp_gemm(InitMatricesFn init_matrices_fn, NVTECommGemmCtx* ctx, NVTECo
       ctx->matmul_desc.get(), CUBLASMP_MATMUL_DESCRIPTOR_ATTRIBUTE_TRANSB, &trans_b,
       sizeof trans_b));
   cublasMpMatmulAlgoType_t algo_attr = cublasmp_algo(algo);
-  // With transB = N, the split ReduceScatter and AllReduce algorithms take MXFP8 B scales as one
-  // padded tensor per output-column chunk, with one chunk per rank. The rank-local scale tensor
-  // passed here has that layout only if the chunks span whole 128-column scale tiles, so otherwise
-  // use the default algorithm, which takes the rank-local tensor.
-  if (mxfp8 && !transb && init_matrices_fn != AgGemmInitMatrices &&
+  // The split ReduceScatter and AllReduce algorithms run one GEMM per output-column chunk, with
+  // one chunk per rank. They can use the rank-local MXFP8 B scale tensor passed here only if the
+  // chunks span whole 128-column scale tiles, so otherwise run without overlap, which takes the
+  // rank-local tensor. (The default algorithm makes the same choice only from cuBLASMp 0.11.0 on.)
+  if (mxfp8 && init_matrices_fn != AgGemmInitMatrices &&
       (algo_attr == CUBLASMP_MATMUL_ALGO_TYPE_SPLIT_P2P ||
        algo_attr == CUBLASMP_MATMUL_ALGO_TYPE_SPLIT_MULTICAST) &&
       (n % ctx->nranks != 0 || (n / ctx->nranks) % 128 != 0)) {
@@ -359,9 +359,9 @@ void cublasmp_gemm(InitMatricesFn init_matrices_fn, NVTECommGemmCtx* ctx, NVTECo
     std::call_once(warned, [&] {
       NVTE_WARN("cuBLASMp MXFP8 comm+GEMM splits the output into ", ctx->nranks, " chunks of ", n,
                 " / ", ctx->nranks,
-                " columns, which is not a multiple of 128, so it uses the default algorithm.");
+                " columns, which is not a multiple of 128, so it runs without overlap.");
     });
-    algo_attr = CUBLASMP_MATMUL_ALGO_TYPE_DEFAULT;
+    algo_attr = CUBLASMP_MATMUL_ALGO_TYPE_NO_OVERLAP;
   }
   NVTE_CHECK_CUBLASMP(cublasMpMatmulDescriptorSetAttribute(
       ctx->matmul_desc.get(), CUBLASMP_MATMUL_DESCRIPTOR_ATTRIBUTE_ALGO_TYPE, &algo_attr,
