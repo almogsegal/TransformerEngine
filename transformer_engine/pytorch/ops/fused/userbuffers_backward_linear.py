@@ -20,6 +20,7 @@ from ...module.base import (
     get_ub,
     using_cublasmp_backend,
 )
+from ...module._common import set_quantizer_amax_reduction_group
 from ...quantized_tensor import Quantizer
 from ...tensor.mxfp8_tensor import MXFP8Quantizer
 from ...utils import canonicalize_device, canonicalize_dtype, clear_tensor_data
@@ -230,6 +231,15 @@ class UserbuffersBackwardLinear(FusedOperation):
             weight_quantizer = None
             grad_output_quantizer = None
             grad_input_quantizer = None
+
+        # Amax reduction groups (sequence parallel): input for column-parallel, grad output for
+        # row-parallel
+        set_quantizer_amax_reduction_group(
+            input_quantizer, tensor_parallel_group if tensor_parallel_mode == "column" else None
+        )
+        set_quantizer_amax_reduction_group(
+            grad_output_quantizer, tensor_parallel_group if tensor_parallel_mode == "row" else None
+        )
 
         # Get Userbuffers communicators
         # Note: Communication patterns are (1) overlap dy all-gather
