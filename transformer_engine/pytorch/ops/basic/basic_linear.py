@@ -32,6 +32,7 @@ from ...tensor.storage.float8_tensor_storage import Float8TensorStorage
 from ...utils import (
     canonicalize_device,
     canonicalize_dtype,
+    canonicalize_process_group,
     clear_tensor_data,
     devices_match,
 )
@@ -530,7 +531,8 @@ class BasicLinear(BasicOperation):
             )
             # Amax reduction group for the input quantizer (column-parallel sequence parallel)
             set_quantizer_amax_reduction_group(
-                input_quantizer, tensor_parallel_group if with_x_all_gather else None
+                input_quantizer,
+                canonicalize_process_group(tensor_parallel_group) if with_x_all_gather else None,
             )
             if with_x_all_gather:
                 input_quantizer.set_usage(columnwise=False)
@@ -778,7 +780,8 @@ class BasicLinear(BasicOperation):
             )
             # Amax reduction group for grad output (row-parallel sequence parallel)
             set_quantizer_amax_reduction_group(
-                grad_output_quantizer, tensor_parallel_group if with_dy_all_gather else None
+                grad_output_quantizer,
+                canonicalize_process_group(tensor_parallel_group) if with_dy_all_gather else None,
             )
             if with_dy_all_gather:
                 dy, dy_async = gather_along_first_dim(
@@ -822,7 +825,12 @@ class BasicLinear(BasicOperation):
                 input_quantizer.set_usage(rowwise=False, columnwise=True)
                 # Amax reduction group for the input quantizer (column-parallel sequence parallel)
                 set_quantizer_amax_reduction_group(
-                    input_quantizer, tensor_parallel_group if with_x_all_gather else None
+                    input_quantizer,
+                    (
+                        canonicalize_process_group(tensor_parallel_group)
+                        if with_x_all_gather
+                        else None
+                    ),
                 )
                 if with_x_all_gather:
                     x, x_async = gather_along_first_dim(

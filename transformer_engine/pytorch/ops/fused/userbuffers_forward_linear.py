@@ -24,6 +24,7 @@ from ...module._common import set_quantizer_amax_reduction_group
 from ...quantized_tensor import Quantizer
 from ...tensor.float8_tensor import Float8Quantizer, Float8CurrentScalingQuantizer
 from ...tensor.storage.float8_tensor_storage import Float8TensorStorage
+from ...utils import canonicalize_process_group
 from .._common import maybe_dequantize, is_quantized_tensor
 from ..basic import BasicLinear, Bias, ReduceScatter
 from ..op import (
@@ -197,7 +198,8 @@ class UserbuffersForwardLinear(FusedOperation):
 
         # Amax reduction group for the input quantizer (column-parallel sequence parallel)
         set_quantizer_amax_reduction_group(
-            input_quantizer, tensor_parallel_group if with_ub_all_gather else None
+            input_quantizer,
+            canonicalize_process_group(tensor_parallel_group) if with_ub_all_gather else None,
         )
 
         # Initialize input tensor

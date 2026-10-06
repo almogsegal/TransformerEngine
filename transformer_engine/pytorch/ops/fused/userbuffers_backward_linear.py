@@ -23,7 +23,12 @@ from ...module.base import (
 from ...module._common import set_quantizer_amax_reduction_group
 from ...quantized_tensor import Quantizer
 from ...tensor.mxfp8_tensor import MXFP8Quantizer
-from ...utils import canonicalize_device, canonicalize_dtype, clear_tensor_data
+from ...utils import (
+    canonicalize_device,
+    canonicalize_dtype,
+    canonicalize_process_group,
+    clear_tensor_data,
+)
 from ..basic import BasicLinear, Bias, ReduceScatter
 from .._common import (
     get_accumulate_flag_in_param,
@@ -234,11 +239,12 @@ class UserbuffersBackwardLinear(FusedOperation):
 
         # Amax reduction groups (sequence parallel): input for column-parallel, grad output for
         # row-parallel
+        amax_reduction_group = canonicalize_process_group(tensor_parallel_group)
         set_quantizer_amax_reduction_group(
-            input_quantizer, tensor_parallel_group if tensor_parallel_mode == "column" else None
+            input_quantizer, amax_reduction_group if tensor_parallel_mode == "column" else None
         )
         set_quantizer_amax_reduction_group(
-            grad_output_quantizer, tensor_parallel_group if tensor_parallel_mode == "row" else None
+            grad_output_quantizer, amax_reduction_group if tensor_parallel_mode == "row" else None
         )
 
         # Get Userbuffers communicators
