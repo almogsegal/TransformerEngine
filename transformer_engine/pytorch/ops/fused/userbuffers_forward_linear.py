@@ -20,6 +20,7 @@ from ...module.base import (
     get_ub,
     _2X_ACC_FPROP,
 )
+from ...module._common import set_quantizer_amax_reduction_group
 from ...quantized_tensor import Quantizer
 from ...tensor.float8_tensor import Float8Quantizer, Float8CurrentScalingQuantizer
 from ...tensor.storage.float8_tensor_storage import Float8TensorStorage
@@ -193,6 +194,11 @@ class UserbuffersForwardLinear(FusedOperation):
         with_ub_all_gather = tensor_parallel_mode == "column"
         with_ub_reduce_scatter = tensor_parallel_mode == "row"
         ub_type = CommOverlapType.AG if with_ub_all_gather else CommOverlapType.RS
+
+        # Amax reduction group for the input quantizer (column-parallel sequence parallel)
+        set_quantizer_amax_reduction_group(
+            input_quantizer, tensor_parallel_group if with_ub_all_gather else None
+        )
 
         # Initialize input tensor
         x_local = input
