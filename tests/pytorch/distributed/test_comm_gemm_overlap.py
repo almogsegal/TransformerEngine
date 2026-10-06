@@ -78,14 +78,14 @@ torch._dynamo.reset()
 
 
 def _run_gemm_with_overlap(
-    comm_type, bulk, p2p, atomic, aggregate, quantization, use_cublasmp=False
+    comm_type, bulk, p2p, atomic, aggregate, quantization, use_cublasmp=False, seq_length=SEQ_LENGTH
 ):
     test_path = TEST_ROOT / "run_gemm_with_overlap.py"
     test_cmd = LAUNCH_CMD + [
         str(test_path),
         "--check-numerics",
         f"--seed={RNG_SEED}",
-        f"--seq-length={SEQ_LENGTH}",
+        f"--seq-length={seq_length}",
         f"--batch-size={BATCH_SIZE}",
         f"--num-heads={NUM_HEADS}",
         f"--head-dim={HEAD_DIM}",
@@ -203,6 +203,17 @@ def test_split_reduce_scatter_overlaps(quantization, p2p, use_cublasmp):
     te.cpp_extensions.fp8_gemm.
     """
     _run_gemm_with_overlap("RS", False, p2p, False, False, quantization, use_cublasmp)
+
+
+@pytest.mark.parametrize("p2p", (False, True))
+def test_split_reduce_scatter_overlaps_unaligned(p2p):
+    """
+    Test cuBLASMp MXFP8 (split GEMM -> reduce-scatter) overlaps when the tokens per rank are not a
+    multiple of 128, so the split algorithms cannot use the rank-local block scales.
+    """
+    _run_gemm_with_overlap(
+        "RS", False, p2p, False, False, "mxfp8", use_cublasmp=True, seq_length=320
+    )
 
 
 @pytest.mark.parametrize(
